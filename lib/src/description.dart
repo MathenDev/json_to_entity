@@ -11,12 +11,14 @@ abstract class Description {
   int get hashCode => name.hashCode;
 
   String get generatedCode;
+
+  Set<Description> get dependencies;
 }
 
-class SimpleDescription extends Description {
+class SingleDescription extends Description {
   final String Function(String name, String type) gen;
 
-  SimpleDescription(String name, String type, this.gen) : super(name, type);
+  SingleDescription(String name, String type, this.gen) : super(name, type);
 
   @override
   String get generatedCode => gen(name, type);
@@ -25,16 +27,28 @@ class SimpleDescription extends Description {
   String toString() {
     return '[$type] $name';
   }
+
+  @override
+  Set<Description> get dependencies => Set.identity();
 }
 
-class ArrayDescription extends SimpleDescription {
-  ArrayDescription(
-      String name, String type, String Function(String name, String type) gen)
-      : super(name, type, gen);
+class ArrayDescription extends Description {
+  final Description child;
+  final String Function(Description child) generate;
+
+  ArrayDescription(String name, this.child, this.generate)
+      : super(name, child.type);
   @override
   String toString() {
     return '[Array<$type>] $name';
   }
+
+  @override
+  String get generatedCode => generate(child);
+
+  @override
+  Set<Description> get dependencies =>
+      child is ObjectDescription ? Set.of([child]): Set.identity();
 }
 
 class ObjectDescription extends Description {
@@ -49,6 +63,13 @@ class ObjectDescription extends Description {
   String toString() {
     return '[$type] $name {${children.join(', ')}}';
   }
+
+  @override
+  Set<Description> get dependencies => children
+      .takeWhile((child) =>
+          child is ObjectDescription ||
+          (child is ArrayDescription && child.child is ObjectDescription))
+      .toSet();
 
   @override
   String get generatedCode => generate(children, name, type);
